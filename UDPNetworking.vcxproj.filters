@@ -20,9 +20,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="example\NetworkingMessageIds.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\NetworkingClient.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

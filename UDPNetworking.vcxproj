@@ -22,7 +22,6 @@
     <ClCompile Include="example\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="example\NetworkingMessageIds.hpp" />
     <ClInclude Include="include\InternalNetworkingMsgIds.hpp" />
     <ClInclude Include="include\NetworkingClient.hpp" />
     <ClInclude Include="include\NetworkingMessage.hpp" />
