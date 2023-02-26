@@ -13,6 +13,7 @@
 #include <thread>
 #include <string>
 #include <array>
+#include <functional>
 
 #ifdef PIT_NETWORKING_LINK_WS2
 #pragma comment(lib, "Ws2_32.lib")
@@ -20,6 +21,8 @@
 #include <cassert>
 
 namespace Pit::Networking {
+    using SecureFunctionSignature = std::function<size_t(size_t, size_t)>;
+
 	struct RecievedMessage {
 		std::string ipAddress;
 		unsigned short port;
@@ -32,6 +35,15 @@ namespace Pit::Networking {
     class UDPSocket {
     public:
         UDPSocket() {
+            Open();
+        }
+        ~UDPSocket() {
+            Close();
+        }
+
+        void Open() {
+            if (IsOpen()) Close();
+
             sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             if (sock == INVALID_SOCKET)
                 throw std::system_error(WSAGetLastError(), std::system_category(), "Error opening socket");
@@ -46,7 +58,7 @@ namespace Pit::Networking {
                     sockaddr_in from;
                     int size = sizeof(from);
                     int returnSize = recvfrom(sock, (char*)buffer.data(), (int)buffer.size(), 0, reinterpret_cast<SOCKADDR*>(&from), &size);
-                    
+
                     if (!m_Listen) break;
 
                     if (returnSize < 0)
@@ -64,9 +76,6 @@ namespace Pit::Networking {
                 }
             });
         }
-        ~UDPSocket() {
-            Close();
-        }
 
         void Close() {
             if (sock)
@@ -76,14 +85,17 @@ namespace Pit::Networking {
                 m_ListenThread.join();
         }
 
-        void Send(const std::string& address, unsigned short port, const void* buffer, size_t bufferSize) {
+        bool IsOpen() const {
+            return m_Listen && sock;
+        }
+
+        bool Send(const std::string& address, unsigned short port, const void* buffer, size_t bufferSize) {
             sockaddr_in add;
             add.sin_family = AF_INET;
             add.sin_addr.s_addr = inet_addr(address.c_str());
             add.sin_port = htons(port);
             int ret = sendto(sock, (const char*)buffer, (int)bufferSize, 0, reinterpret_cast<SOCKADDR*>(&add), sizeof(add));
-            if (ret < 0)
-                throw std::system_error(WSAGetLastError(), std::system_category(), "sendto failed");
+            return ret > 0;
         }
         void SendMsg(const std::string& address, unsigned short port, size_t sender, const Message& msg) {
             std::vector<uint8_t> data(msg.size());

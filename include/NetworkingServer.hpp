@@ -13,16 +13,29 @@ namespace Pit::Networking {
 	struct ClientInfo {
 		std::string Ip;
 		unsigned short Port;
+
+		bool Verified = false;
+		size_t Question_InputA;
+		size_t Question_InputB;
 	};
 
 	class Server {
 	public:
-		virtual ~Server() = default;
+		Server(unsigned short port, SecureFunctionSignature secureFunction)
+			: m_Port(port), m_SecureFunction(secureFunction) {}
 
-		Server(unsigned short port) : m_Port(port) {}
+		virtual ~Server() {
+			Close();
+		}
 
 		void Bind() {
 			m_Socket.Bind(m_Port);
+		}
+
+		void Close() {
+			Message disconnectMsg((size_t)InternalServerToClientMsgId::Disconnect);
+			SendAll(disconnectMsg);
+			m_Socket.Close();
 		}
 
 		void Send(size_t clientId, const Message& msg) {
@@ -44,6 +57,12 @@ namespace Pit::Networking {
 			}
 		}
 
+		void KickClient(size_t clientId) {
+			Message kickMsg((size_t)InternalServerToClientMsgId::Kick);
+			Send(clientId, kickMsg);
+			m_Clients.erase(clientId);
+		}
+
 		bool GetNextMessage(RecievedMessage* outMsg) {
 			auto& recievedMsgs = m_Socket.GetRecievedMessages();
 			if (!recievedMsgs.empty()) {
@@ -52,17 +71,46 @@ namespace Pit::Networking {
 
 				if (outMsg->msg.Id == (size_t)InternalClientToServerMsgId::ConnectRequest) {
 					bool acceptClient = OnClientConnectionRequest(outMsg->ipAddress);
-					size_t clientId = acceptClient ? m_ClientIdCounter++ : 0;
-					Message connectRequestResponse((size_t)InternalServerToClientMsgId::ConnectionResponse);
-					connectRequestResponse << acceptClient;
-					connectRequestResponse << clientId;
-					m_Socket.SendMsg(outMsg->ipAddress, outMsg->port, SERVER_SEND_ID, connectRequestResponse);
 					if (acceptClient) {
-						m_Clients[clientId] = { outMsg->ipAddress, outMsg->port };
-						std::cout << "Accepted client " << clientId << '\n';
+						Message connectQuestion((size_t)InternalServerToClientMsgId::ConnectQuestion);
+						size_t clientId = m_ClientIdCounter++;
+						size_t questionInputA = (size_t)rand(), questionInputB = (size_t)rand();
+						connectQuestion << clientId;
+						connectQuestion << questionInputA << questionInputB;
+						m_Clients[clientId] = { outMsg->ipAddress, outMsg->port, false, questionInputA, questionInputB };
+						Send(clientId, connectQuestion);
 					}
 					return false;
 				}
+				if (outMsg->msg.Id == (size_t)InternalClientToServerMsgId::ConnectRequestAnswer) {
+					auto findClient = m_Clients.find(outMsg->msg.Sender);
+					if (findClient != m_Clients.end()) {
+						auto& client = findClient->second;
+						size_t correctAnswer = m_SecureFunction(client.Question_InputA, client.Question_InputB);
+						size_t clientAnswer = 0;
+						outMsg->msg >> clientAnswer;
+
+						Message connectResponse((size_t)InternalServerToClientMsgId::ConnectionResponse);
+						connectResponse << (clientAnswer == correctAnswer);
+						Send(outMsg->msg.Sender, connectResponse);
+
+						if (clientAnswer == correctAnswer) {
+							client.Verified = true;
+							OnClientConnected(outMsg->msg.Sender);
+						}
+						else
+							KickClient(outMsg->msg.Sender);
+					}
+					return false;
+				}
+				if (outMsg->msg.Id == (size_t)InternalClientToServerMsgId::Disconnect) {
+					auto findClient = m_Clients.find(outMsg->msg.Sender);
+					if (findClient != m_Clients.end()) {
+						OnClientDisconnected(outMsg->msg.Sender);
+						m_Clients.erase(outMsg->msg.Sender);
+					}
+				}
+
 				return true;
 			}
 			return false;
@@ -72,13 +120,14 @@ namespace Pit::Networking {
 		virtual bool OnClientConnectionRequest(const std::string& ip) {
 			return true; // do some kind of blacklist checking...
 		}
-		virtual void OnClientConnected(const std::string& ip) {}
-		virtual void OnClientDisconnected(const std::string& ip) {}
+		virtual void OnClientConnected(size_t clientId) { std::cout << "Client connected: " << clientId << '\n'; }
+		virtual void OnClientDisconnected(size_t clientId) { std::cout << "Client disconnected: " << clientId << '\n'; }
 
 	protected:
 		unsigned short m_Port;
 		size_t m_ClientIdCounter = 1;
 		std::unordered_map<size_t, ClientInfo> m_Clients;
 		UDPSocket m_Socket;
+		SecureFunctionSignature m_SecureFunction;
 	};
 }
