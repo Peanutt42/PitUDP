@@ -117,7 +117,7 @@ namespace Pit::Networking {
 		}
 
 	protected:
-		virtual bool OnClientConnectionRequest(const std::string& ip) {
+		virtual bool OnClientConnectionRequest([[maybe_unused]] const std::string& ip) {
 			return true; // do some kind of blacklist checking...
 		}
 		virtual void OnClientConnected(size_t clientId) { std::cout << "Client connected: " << clientId << '\n'; }

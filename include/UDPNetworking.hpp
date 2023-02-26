@@ -23,14 +23,14 @@
 namespace Pit::Networking {
     using SecureFunctionSignature = std::function<size_t(size_t, size_t)>;
 
-	struct RecievedMessage {
-		std::string ipAddress;
-		unsigned short port;
-		Message msg;
+    struct RecievedMessage {
+        std::string ipAddress;
+        unsigned short port;
+        Message msg;
 
-		RecievedMessage(MessageId id, size_t capacity = 0)
-			: msg(id, capacity), ipAddress("empty"), port(0) {}
-	};
+        RecievedMessage(MessageId id, size_t capacity = 0)
+            : msg(id, capacity), ipAddress("empty"), port(0) {}
+    };
 
     class UDPSocket {
     public:
@@ -74,7 +74,7 @@ namespace Pit::Networking {
 
                     std::memset(buffer.data(), 0, buffer.size());
                 }
-            });
+                });
         }
 
         void Close() {
@@ -123,14 +123,14 @@ namespace Pit::Networking {
         bool m_Listen = true;
     };
 
-	static void Init() {
+    [[maybe_unused]] static void Init() {
         WSAData data;
         int ret = WSAStartup(MAKEWORD(2, 2), &data);
         if (ret != 0)
             throw std::system_error(WSAGetLastError(), std::system_category(), "WSAStartup Failed");
-	}
+    }
 
-	static void Shutdown() {
-		WSACleanup();
-	}
+    [[maybe_unused]] static void Shutdown() {
+        WSACleanup();
+    }
 }
