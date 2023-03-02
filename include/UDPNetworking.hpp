@@ -61,10 +61,7 @@ namespace Pit::Networking {
 
                     if (!m_Listen) break;
 
-                    if (returnSize < 0)
-                        std::cout << "Failed to recieve\n";
-                    else {
-
+                    if (returnSize >= 0) {
                         m_RecievedMsgs.emplace_back(0);
                         auto& recievedMsg = m_RecievedMsgs.back();
                         recievedMsg.ipAddress = inet_ntoa(from.sin_addr);
