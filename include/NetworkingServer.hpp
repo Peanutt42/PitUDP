@@ -13,16 +13,12 @@ namespace Pit::Networking {
 	struct ClientInfo {
 		std::string Ip;
 		unsigned short Port;
-
-		bool Verified = false;
-		size_t Question_InputA;
-		size_t Question_InputB;
 	};
 
 	class Server {
 	public:
-		Server(unsigned short port, SecureFunctionSignature secureFunction)
-			: m_Port(port), m_SecureFunction(secureFunction) {}
+		Server(unsigned short port)
+			: m_Port(port) {}
 
 		virtual ~Server() {
 			Close();
@@ -57,54 +53,21 @@ namespace Pit::Networking {
 			}
 		}
 
-		void KickClient(size_t clientId) {
-			Message kickMsg((size_t)InternalServerToClientMsgId::Kick);
-			Send(clientId, kickMsg);
-			m_Clients.erase(clientId);
-		}
-
 		bool GetNextMessage(RecievedMessage* outMsg) {
 			auto& recievedMsgs = m_Socket.GetRecievedMessages();
 			if (!recievedMsgs.empty()) {
 				*outMsg = recievedMsgs.pop_front();
 				if (outMsg->msg.Sender == SERVER_SEND_ID) return false;
 
-				if (outMsg->msg.Id == (size_t)InternalClientToServerMsgId::ConnectRequest) {
+				if (outMsg->msg.Id == (size_t)InternalClientToServerMsgId::Connect) {
 					bool acceptClient = OnClientConnectionRequest(outMsg->ipAddress);
 					if (acceptClient) {
-						Message connectQuestion((size_t)InternalServerToClientMsgId::ConnectQuestion);
-						if (outMsg->msg.Sender != 0) {
-							auto findClient = m_Clients.find(outMsg->msg.Sender);
-							if (findClient != m_Clients.end())
-								return false;
-						}
+						Message connectResponse((size_t)InternalServerToClientMsgId::ConnectResponse);
 						size_t clientId = m_ClientIdCounter++;
-						size_t questionInputA = (size_t)rand(), questionInputB = (size_t)rand();
-						connectQuestion << clientId;
-						connectQuestion << questionInputA << questionInputB;
-						m_Clients[clientId] = { outMsg->ipAddress, outMsg->port, false, questionInputA, questionInputB };
-						Send(clientId, connectQuestion);
-					}
-					return false;
-				}
-				if (outMsg->msg.Id == (size_t)InternalClientToServerMsgId::ConnectRequestAnswer) {
-					auto findClient = m_Clients.find(outMsg->msg.Sender);
-					if (findClient != m_Clients.end()) {
-						auto& client = findClient->second;
-						size_t correctAnswer = m_SecureFunction(client.Question_InputA, client.Question_InputB);
-						size_t clientAnswer = 0;
-						outMsg->msg >> clientAnswer;
-
-						Message connectResponse((size_t)InternalServerToClientMsgId::ConnectionResponse);
-						connectResponse << (clientAnswer == correctAnswer);
-						Send(outMsg->msg.Sender, connectResponse);
-
-						if (clientAnswer == correctAnswer) {
-							client.Verified = true;
-							OnClientConnected(outMsg->msg.Sender);
-						}
-						else
-							KickClient(outMsg->msg.Sender);
+						connectResponse << clientId;
+						m_Clients[clientId] = { outMsg->ipAddress, outMsg->port };
+						Send(clientId, connectResponse);
+						OnClientConnected(clientId);
 					}
 					return false;
 				}
@@ -133,6 +96,5 @@ namespace Pit::Networking {
 		size_t m_ClientIdCounter = 1;
 		std::unordered_map<size_t, ClientInfo> m_Clients;
 		UDPSocket m_Socket;
-		SecureFunctionSignature m_SecureFunction;
 	};
 }

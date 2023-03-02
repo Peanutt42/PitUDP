@@ -9,12 +9,12 @@ namespace Pit::Networking {
 	public:
 		virtual ~Client() = default;
 
-		Client(const std::string& serverIp, unsigned short port, SecureFunctionSignature secureFunction)
-			: m_ServerIp(serverIp), m_Port(port), m_SecureFunction(secureFunction) {}
+		Client(const std::string& serverIp, unsigned short port)
+			: m_ServerIp(serverIp), m_Port(port) {}
 
 		void Connect() {
-			Message connectRequestMsg((size_t)InternalClientToServerMsgId::ConnectRequest);
-			m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, connectRequestMsg);
+			Message connectMsg((size_t)InternalClientToServerMsgId::Connect);
+			Send(connectMsg);
 		}
 
 		void Disconnect() {
@@ -27,39 +27,15 @@ namespace Pit::Networking {
 		}
 
 		void Send(const Message& msg) {
-			if (m_Accepted)
-				m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, msg);
-			else {
-				static size_t tryCount = 0;
-				tryCount++;
-				if (tryCount > 10) {
-					Connect();
-					tryCount = 0;
-				}
-			}
+			m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, msg);
 		}
 
 		bool GetNextMessage(RecievedMessage* outMsg) {
 			auto& recievedMsgs = m_Socket.GetRecievedMessages();
 			if (!recievedMsgs.empty()) {
 				*outMsg = recievedMsgs.pop_front();
-				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectQuestion) {
-					size_t questionInputA = 0, questionInputB = 0;
-					outMsg->msg >> questionInputB >> questionInputA;
+				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectResponse) {
 					outMsg->msg >> m_Id;
-					size_t answer = m_SecureFunction(questionInputA, questionInputB);
-					Message answerMsg((size_t)InternalClientToServerMsgId::ConnectRequestAnswer);
-					answerMsg << answer;
-					m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, answerMsg);
-					return false;
-				}
-				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectionResponse) {
-					outMsg->msg >> m_Accepted;
-					if (m_Accepted)
-						OnServerAccept();
-					else
-						OnServerRejected();
-
 					return false;
 				}
 				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::Disconnect) {
@@ -73,12 +49,6 @@ namespace Pit::Networking {
 		}
 
 	protected:
-		virtual void OnServerAccept() {
-			std::cout << "Got accepted by server!\n";
-		}
-		virtual void OnServerRejected() {
-			std::cout << "Got rejected by server!\n";
-		}
 		virtual void OnServerDisconnected() {
 			std::cout << "Server disconnected!\n";
 		}
@@ -87,8 +57,6 @@ namespace Pit::Networking {
 		std::string m_ServerIp;
 		unsigned short m_Port = 0;
 		size_t m_Id = 0;
-		bool m_Accepted = false;
 		UDPSocket m_Socket;
-		SecureFunctionSignature m_SecureFunction;
 	};
 }

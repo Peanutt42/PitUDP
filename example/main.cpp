@@ -16,15 +16,6 @@ enum class ClientToServerMsgId : size_t {
 	ChatPublic = 2
 };
 
-static size_t MySecureFunction(size_t inputA, size_t inputB) {
-	size_t output = 8129812;
-	
-	output ^= std::hash<size_t>{}(inputA)+0x9e3779b9 + (output << 6) + (output >> 2);
-	output ^= std::hash<size_t>{}(inputB)+0x9e3779b9 + (output << 6) + (output >> 2);
-
-	return output;
-}
-
 int main(int argc, char** argv) {
 	Networking::Init();
 
@@ -42,7 +33,7 @@ int main(int argc, char** argv) {
 
 	if (isClient) {
 		std::string serverIp = argv[3];
-		Client client(serverIp, port, MySecureFunction);
+		Client client(serverIp, port);
 		client.Connect();
 		while (true) {
 			std::string message;
@@ -76,7 +67,7 @@ int main(int argc, char** argv) {
 		client.Disconnect();
 	}
 	else {
-		Server server(port, MySecureFunction);
+		Server server(port);
 		server.Bind();
 		while (true) {
 			if (GetAsyncKeyState(VK_ESCAPE) & 0x01) break;
