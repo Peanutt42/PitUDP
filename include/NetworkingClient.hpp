@@ -9,12 +9,12 @@ namespace Pit::Networking {
 	public:
 		virtual ~Client() = default;
 
-		Client(const std::string& serverIp, unsigned short port)
-			: m_ServerIp(serverIp), m_Port(port) {}
+		Client(const std::string& serverIp, unsigned short port, SecureFunctionSignature secureFunction)
+			: m_ServerIp(serverIp), m_Port(port), m_SecureFunction(secureFunction) {}
 
 		void Connect() {
-			Message connectMsg((size_t)InternalClientToServerMsgId::Connect);
-			Send(connectMsg);
+			Message connectRequestMsg((size_t)InternalClientToServerMsgId::ConnectRequest);
+			m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, connectRequestMsg);
 		}
 
 		void Disconnect() {
@@ -23,7 +23,6 @@ namespace Pit::Networking {
 			m_ServerIp = "empty";
 			m_Port = 0;
 			m_Socket.Close();
-			m_Id = 0;
 		}
 
 		void Send(const Message& msg) {
@@ -34,8 +33,24 @@ namespace Pit::Networking {
 			auto& recievedMsgs = m_Socket.GetRecievedMessages();
 			if (!recievedMsgs.empty()) {
 				*outMsg = recievedMsgs.pop_front();
-				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectResponse) {
+				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectQuestion) {
+					size_t questionInputA = 0, questionInputB = 0;
+					outMsg->msg >> questionInputB >> questionInputA;
 					outMsg->msg >> m_Id;
+					size_t answer = m_SecureFunction(questionInputA, questionInputB);
+					Message answerMsg((size_t)InternalClientToServerMsgId::ConnectRequestAnswer);
+					answerMsg << answer;
+					Send(answerMsg);
+					return false;
+				}
+				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectionResponse) {
+					bool accepted = false;
+					outMsg->msg >> accepted;
+					if (accepted)
+						OnServerAccept();
+					else
+						OnServerRejected();
+
 					return false;
 				}
 				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::Disconnect) {
@@ -49,6 +64,12 @@ namespace Pit::Networking {
 		}
 
 	protected:
+		virtual void OnServerAccept() {
+			std::cout << "Got accepted by server!\n";
+		}
+		virtual void OnServerRejected() {
+			std::cout << "Got rejected by server!\n";
+		}
 		virtual void OnServerDisconnected() {
 			std::cout << "Server disconnected!\n";
 		}
@@ -58,5 +79,6 @@ namespace Pit::Networking {
 		unsigned short m_Port = 0;
 		size_t m_Id = 0;
 		UDPSocket m_Socket;
+		SecureFunctionSignature m_SecureFunction;
 	};
 }
