@@ -73,6 +73,11 @@ namespace Pit::Networking {
 					bool acceptClient = OnClientConnectionRequest(outMsg->ipAddress);
 					if (acceptClient) {
 						Message connectQuestion((size_t)InternalServerToClientMsgId::ConnectQuestion);
+						if (outMsg->msg.Sender != 0) {
+							auto findClient = m_Clients.find(outMsg->msg.Sender);
+							if (findClient != m_Clients.end())
+								return false;
+						}
 						size_t clientId = m_ClientIdCounter++;
 						size_t questionInputA = (size_t)rand(), questionInputB = (size_t)rand();
 						connectQuestion << clientId;

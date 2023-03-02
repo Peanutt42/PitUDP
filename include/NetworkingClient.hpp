@@ -23,10 +23,20 @@ namespace Pit::Networking {
 			m_ServerIp = "empty";
 			m_Port = 0;
 			m_Socket.Close();
+			m_Id = 0;
 		}
 
 		void Send(const Message& msg) {
-			m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, msg);
+			if (m_Accepted)
+				m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, msg);
+			else {
+				static size_t tryCount = 0;
+				tryCount++;
+				if (tryCount > 10) {
+					Connect();
+					tryCount = 0;
+				}
+			}
 		}
 
 		bool GetNextMessage(RecievedMessage* outMsg) {
@@ -40,13 +50,12 @@ namespace Pit::Networking {
 					size_t answer = m_SecureFunction(questionInputA, questionInputB);
 					Message answerMsg((size_t)InternalClientToServerMsgId::ConnectRequestAnswer);
 					answerMsg << answer;
-					Send(answerMsg);
+					m_Socket.SendMsg(m_ServerIp, m_Port, m_Id, answerMsg);
 					return false;
 				}
 				if (outMsg->msg.Id == (size_t)InternalServerToClientMsgId::ConnectionResponse) {
-					bool accepted = false;
-					outMsg->msg >> accepted;
-					if (accepted)
+					outMsg->msg >> m_Accepted;
+					if (m_Accepted)
 						OnServerAccept();
 					else
 						OnServerRejected();
@@ -78,6 +87,7 @@ namespace Pit::Networking {
 		std::string m_ServerIp;
 		unsigned short m_Port = 0;
 		size_t m_Id = 0;
+		bool m_Accepted = false;
 		UDPSocket m_Socket;
 		SecureFunctionSignature m_SecureFunction;
 	};
